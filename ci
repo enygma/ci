@@ -9,7 +9,7 @@ abstract class Base {
 		'create'
 	);
 	protected $_types	= array(
-		'model','controller','library'
+		'model','controller','library','project'
 	);
 
 	function __construct(){
@@ -31,7 +31,7 @@ class Cli extends Base {
 		//var_dump(parent::$_cfg);
 	}
 	public function handle(){
-		if(count($_SERVER['argv'])>1){
+		if(count($_SERVER['argv'])>2){
 			// we have sometrhng to do!
 			
 			// normalize
@@ -52,7 +52,16 @@ class Cli extends Base {
 				$obj=new $class();
 				$obj->$action($this,$_SERVER['argv']);
 			}
+		}else{
+			//Display the help message
+			echo "Usage: ci <action> <type> <optional values>\n";
+			
+			if(isset($_SERVER['argv'][1]) && $_SERVER['argv'][1]=='--help'){
+				echo "Actions:\t".implode(', ',$this->_actions)."\n";
+				echo "Types:\t".implode(', ',$this->_types)."\n";
+			};
 		}
+		echo "\n";
 	}
 	public function writeToFile($type,$name,$content){
 		$path=Config::get('DEF_PATH');
@@ -60,7 +69,7 @@ class Cli extends Base {
 		
 		// If we don't have a path, use the local one
 		if($path===null){ $path=getcwd(); }
-		$p=$path.'/'.$name.'.php';
+		$p=$path.'/system/application/'.$type.'/'.$name.'.php';
 
 		if(!is_file($p)){
 			if(is_writable($p)){ 
