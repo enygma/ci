@@ -1,0 +1,197 @@
+#!/usr/bin/php
+<?php
+
+abstract class Base {
+
+	protected $_docroot	= null;
+	static $_cfg		= null;
+	protected $_actions	= array(
+		'create'
+	);
+	protected $_types	= array(
+		'model','controller','library'
+	);
+
+	function __construct(){
+		$this->_docroot=__DIR__;
+	}
+	
+}
+//-------------------
+class Cli extends Base {
+	
+	/* TODO: load in a default configuration */
+	private $_cobj	= null;
+	
+	function __construct(){
+		parent::__construct();
+		$this->_cobj=new Config();
+		parent::$_cfg=Config::load();
+		
+		//var_dump(parent::$_cfg);
+	}
+	public function handle(){
+		if(count($_SERVER['argv'])>1){
+			// we have sometrhng to do!
+			
+			// normalize
+			$action=strtolower($_SERVER['argv'][1]);
+			$target=strtolower($_SERVER['argv'][2]);
+			
+			// Be sure that we've given an allowed action
+			if(!in_array($action,$this->_actions)){
+				throw new Exception('Invalid action type "'.$action.'"');
+			}
+			// ...and an allowed target type
+			if(!in_array($target,$this->_types)){
+				throw new Exception('Invalid action type "'.$target.'"');
+			}
+			
+			$class=ucwords($target);
+			if(class_exists($class)){
+				$obj=new $class();
+				$obj->$action($this,$_SERVER['argv']);
+			}
+		}
+	}
+	public function writeToFile($type,$name,$content){
+		$path=Config::get('DEF_PATH');
+		$type=ucwords(strtolower($type));
+		
+		// If we don't have a path, use the local one
+		if($path===null){ $path=getcwd(); }
+		$p=$path.'/'.$name.'.php';
+
+		if(!is_file($p)){
+			if(is_writable($p)){ 
+				//Write out the file
+				file_put_contents($p,$content); 
+			}else{ 
+				throw new Exception('Cannot write to file! ('.$p.')'); 
+			}
+		}else{ throw new Exception($type.' '.$name.'.php already exists! ('.$p.')'); }
+	}
+}
+class Config extends Base {
+	
+	static $_defaults=array(
+		'DEF_CONSTRUCT'			=> "\tfunction __construct(){\n \t\tparent::[DEF_CONSTRUCT_TYPE]();\n\t }",
+		'DEF_MODEL_CLASS'		=> "class [DEF_MODEL_NAME] extends Model {\n [DEF_CONTENT] \n}",
+		'DEF_CONTROLLER_CLASS'	=> "class [DEF_CONTROLLER_NAME] extends Controller {\n [DEF_CONTENT] \n}",
+		'DEF_LIBRARY_CLASS'		=> "class [DEF_LIBRARY_NAME] {\n [DEF_CONTENT] \n}",
+		'DEF_PATH'				=> null
+	);
+	
+	/* By default, we're going to look for the config 
+		in the current directory */
+	static $_cfg_file	= '	ci_config.ini';
+	static $_cfg_path	= null;
+	static $_root		= null;
+	
+	function __construct(){
+		parent::__construct();
+		self::$_root=__DIR__;
+	}
+	static function load(){
+		// First, push our defaults into the array
+		$def = self::$_defaults;
+		$p	 = self::$_root.'/'.trim(self::$_cfg_file);
+		
+		// If we have a file, override our current settings
+		if(is_file($p)){
+			$ini=parse_ini_file($p,true);
+			foreach($ini['defaults'] as $k=>$v){
+				$def[$k]=$v;
+			}
+		}
+		return $def;
+	}
+	static function get($key){
+		return self::$_cfg[$key];
+	}
+	
+}
+################################
+class Model extends Base {
+
+	function __construct(){
+		parent::__construct();
+	}
+	public function create($in){
+		//According to CodeIgniter standards, the model must have first letter capitalized
+		$name=ucwords(strtolower($in[3]));
+		
+		// define some defaults
+		$content=str_replace(
+			array('[DEF_CONSTRUCT_TYPE]'),
+			array('__construct'),
+			Config::get('DEF_CONSTRUCT'));
+			
+		$result=str_replace(
+			array('[DEF_CONTENT]','[DEF_MODEL_NAME]'),
+			array($content,$name),
+			Config::get('DEF_MODEL_CLASS'));
+			
+		//php_check_syntax
+		//echo highlight_string($result)."\n\n";
+		echo $result."\n\n";
+		
+	}
+}
+//-------------------
+class Controller extends Base {
+	
+	function __construct(){
+		parent::__construct();
+	}
+	//-----------------
+	public function create($in){
+		//According to CodeIgniter standards, the model must have first letter capitalized
+		$name=ucwords(strtolower($in[3]));
+		
+		// define some defaults
+		$content=str_replace(
+			array('[DEF_CONSTRUCT_TYPE]'),
+			array('__construct'),
+			Config::get('DEF_CONSTRUCT'));
+			
+		$result=str_replace(
+			array('[DEF_CONTENT]','[DEF_LIBRARY_NAME]'),
+			array($content,$name),
+			Config::get('DEF_CONTROLLER_CLASS'));
+			
+		//php_check_syntax
+		//echo highlight_string($result)."\n\n";
+		echo $result."\n\n";
+	}
+}
+//-------------------
+class Library extends Base {
+	
+	function __construct(){
+		parent::__construct();
+	}
+	//-----------------
+	public function create($obj,$in){
+		//According to CodeIgniter standards, the model must have first letter capitalized
+		$name=ucwords(strtolower($in[3]));
+		
+		// define some defaults
+		$content=str_replace(
+			array('[DEF_CONSTRUCT_TYPE]'),
+			array('__construct'),
+			Config::get('DEF_CONSTRUCT'));
+		$result=str_replace(
+			array('[DEF_CONTENT]','[DEF_LIBRARY_NAME]'),
+			array($content,$name),
+			Config::get('DEF_LIBRARY_CLASS'));
+		
+		$obj->writeToFile('library',$name,$result);
+	}
+}
+################################
+
+$cli=new Cli();
+try{ $cli->handle(); }catch(Exception $e){ echo 'ERROR: '.$e->getMessage()."\n"; }
+
+?>
