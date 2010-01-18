@@ -1,0 +1,25 @@
+
+ci: A command-line rapid development CodeIgniter tool
+----------------------
+
+Sample usage:
+./ci create library test
+
+Result:
+Following content placed in a file...
+-----
+<?php
+class Test {
+	function __construct(){
+	}
+}
+?>
+-----
+
+The "--help" can also be passed in for more information:
+./ci --help
+
+If ci_config.ini file exists in the local directory,
+the ci tool will pick it up and use its settings. See
+included copy for an example.
+
