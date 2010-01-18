@@ -54,7 +54,7 @@ class Cli extends Base {
 			}
 		}else{
 			//Display the help message
-			echo "Usage: ci <action> <type> <optional values>\n";
+			echo "Usage: ci [action] [type] [additional values]\n";
 			
 			if(isset($_SERVER['argv'][1]) && $_SERVER['argv'][1]=='--help'){
 				echo "Actions:\t".implode(', ',$this->_actions)."\n";
