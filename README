@@ -1,6 +1,7 @@
 
 ci: A command-line rapid development CodeIgniter tool
 ----------------------
+NOTE: Requires PHP5 installation
 
 Sample usage:
 ./ci create library test
@@ -18,6 +19,12 @@ class Test {
 
 The "--help" can also be passed in for more information:
 ./ci --help
+
+---------------
+** Commands **
+./ci create library|model|controller [name]
+./ci modify library|model|controller [name] addmethod [method_name]
+---------------
 
 If ci_config.ini file exists in the local directory,
 the ci tool will pick it up and use its settings. See
