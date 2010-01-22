@@ -6,7 +6,7 @@ abstract class Base {
 	protected $_docroot	= null;
 	static $_cfg		= null;
 	protected $_actions	= array(
-		'create'
+		'create','modify'
 	);
 	protected $_types	= array(
 		'model','controller','library','project'
@@ -69,25 +69,27 @@ class Cli extends Base {
 		
 		// If we don't have a path, use the local one
 		if($path===null){ $path=getcwd(); }
-		$p=$path.'/system/application/'.$type.'/'.$name.'.php';
+		$p=$path.'/system/application/'.strtolower($type);
+		$f=$p.'/'.$name.'.php';
 
-		if(!is_file($p)){
+		if(!is_file($f)){
 			if(is_writable($p)){ 
 				//Write out the file
-				file_put_contents($p,$content); 
+				file_put_contents($f,$content); 
 			}else{ 
-				throw new Exception('Cannot write to file! ('.$p.')'); 
+				throw new Exception('Cannot write to file! ('.$f.')'); 
 			}
-		}else{ throw new Exception($type.' '.$name.'.php already exists! ('.$p.')'); }
+		}else{ throw new Exception($type.' '.$name.'.php already exists! ('.$f.')'); }
 	}
 }
 class Config extends Base {
 	
 	static $_defaults=array(
 		'DEF_CONSTRUCT'			=> "\tfunction __construct(){\n \t\tparent::[DEF_CONSTRUCT_TYPE]();\n\t }",
-		'DEF_MODEL_CLASS'		=> "class [DEF_MODEL_NAME] extends Model {\n [DEF_CONTENT] \n}",
-		'DEF_CONTROLLER_CLASS'	=> "class [DEF_CONTROLLER_NAME] extends Controller {\n [DEF_CONTENT] \n}",
-		'DEF_LIBRARY_CLASS'		=> "class [DEF_LIBRARY_NAME] {\n [DEF_CONTENT] \n}",
+		'DEF_MODEL_CLASS'		=> "<?php\n class [DEF_MODEL_NAME] extends Model {\n [DEF_CONTENT] \n} \n?>",
+		'DEF_CONTROLLER_CLASS'	=> "<?php\n class [DEF_CONTROLLER_NAME] extends Controller {\n [DEF_CONTENT] \n} \n?>",
+		'DEF_LIBRARY_CLASS'		=> "<?php\n class [DEF_LIBRARY_NAME] {\n [DEF_CONTENT] \n} \n?>",
+		'DEF_METHOD'			=> "\tpublic function [DEF_METHOD_NAME](){\n\t\n}",
 		'DEF_PATH'				=> null
 	);
 	
@@ -197,6 +199,57 @@ class Library extends Base {
 		
 		$obj->writeToFile('library',$name,$result);
 	}
+	public function modify($obj,$in){
+		//print_r($in);
+		
+		if(method_exists($this,'_'.$in[4])){
+			$this->{'_'.$in[4]}($in);
+		}else{
+			throw new Exception('Action not defined! ('.$in[4].')'); 
+		}
+	}
+	//-----------------
+	private function _addMethod($in){
+		echo 'add method';
+		print_r($in);
+		
+		$path=Config::get('DEF_PATH');
+		$lib_name=ucwords(strtolower($in[3]));
+		$lib=$lib_name.'.php';
+		
+		// If we don't have a path, use the local one
+		if($path===null){ $path=getcwd(); }
+		$p=$path.'/system/application/library/'.$lib;
+		
+		echo $p; 
+		
+		// See if the file exists and if it can be written too...
+		if(is_file($p)){
+			if(is_writable($p)){
+				//Excellent! Lets find the location of the end of the last method!
+				
+				include_once($p);
+				$ref=new ReflectionClass($lib_name);
+				$meth=$ref->getMethods();
+				$last_line=$meth[0]->getEndLine();
+				
+				$out['content']=str_replace(
+					array('[DEF_METHOD_NAME]'),
+					array($in[5]),
+					Config::get('DEF_METHOD'));
+				
+				// Now, lets insert something in there
+				$lines	= file($p);
+				$before	= array_splice($lines,0,$last_line);
+				$all	= array_merge($before,$out,$lines);
+				
+				// Write it out!
+				file_put_contents($p,implode("",$all));
+				
+			}else{ throw new Exception('Invalid permissions! ('.$p.')'); }
+		}else{ throw new Exception('Library file not found! ('.$p.')'); }
+	}
+	
 }
 ################################
 
