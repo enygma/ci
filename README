@@ -23,7 +23,7 @@ The "--help" can also be passed in for more information:
 ---------------
 ** Commands **
 ./ci create library|model|controller [name]
-./ci modify library|model|controller [name] addmethod [method_name]
+./ci modify library|model|controller [name] add --type=method --name=[method_name]
 ---------------
 
 If ci_config.ini file exists in the local directory,

@@ -6,14 +6,83 @@ abstract class Base {
 	protected $_docroot	= null;
 	static $_cfg		= null;
 	protected $_actions	= array(
-		'create','modify'
+		'create','modify','generate'
 	);
 	protected $_types	= array(
-		'model','controller','library','project'
+		'model','controller','library','project','models'
 	);
 
 	function __construct(){
 		$this->_docroot=__DIR__;
+	}
+	public function parseArgs($args){
+		foreach($args as $k=>$a){
+			preg_match('/--([a-z]+)=(.+)/',$a,$m);
+			if(isset($m[1]) && isset($m[2])){
+				unset($args[$k]);
+				$args[$m[1]]=$m[2];
+			}
+		}
+		return $args;
+	}
+	//---------------------
+	//-----------------
+	public function _add($in){
+		// Be sure we have a type and name.
+		$in=$this->parseArgs($in);
+		
+		if(isset($in['type']) && isset($in['name'])){
+			$func='add_'.strtolower($in['type']);
+			if(method_exists($this,$func)){
+				$this->$func($in);
+			}else{ throw new Exception('Type not supported!'); }
+		}else{ throw new Exception('Required fields [type,name] not set!'); }
+	}
+	
+	/**
+	 * Generic method to dynamically add methods to a class
+	 * Uses Reflection to determine the right place to put it...
+	 */
+	public function add_method($in){
+		$path=Config::get('DEF_PATH');
+		$lib_name=ucwords(strtolower($in[3]));
+		$lib=$lib_name.'.php';
+		
+		// If we don't have a path, use the local one
+		if($path===null){ $path=getcwd(); }
+		$p=$path.'/system/application/library/'.$lib;
+		
+		// See if the file exists and if it can be written too...
+		if(is_file($p)){
+			if(is_writable($p)){
+				//Excellent! Lets find the location of the end of the last method!
+				
+				include_once($p);
+				$ref=new ReflectionClass($lib_name);
+				
+				// Be sure it's not already there
+				if($ref->hasMethod($in['name'])){
+					throw new Exception('Method already defined!');
+				}
+				
+				$meth=$ref->getMethods();
+				$last_line=$meth[count($meth)-1]->getEndLine();
+				
+				$out['content']=str_replace(
+					array('[DEF_METHOD_NAME]'),
+					array($in['name']),
+					Config::get('DEF_METHOD'));
+				
+				// Now, lets insert something in there
+				$lines	= file($p);
+				$before	= array_splice($lines,0,$last_line);
+				$all	= array_merge($before,$out,$lines);
+				
+				// Write it out!
+				file_put_contents($p,implode("",$all));
+				
+			}else{ throw new Exception('Invalid permissions! ('.$p.')'); }
+		}else{ throw new Exception('Library file not found! ('.$p.')'); }
 	}
 	
 }
@@ -89,7 +158,7 @@ class Config extends Base {
 		'DEF_MODEL_CLASS'		=> "<?php\n class [DEF_MODEL_NAME] extends Model {\n [DEF_CONTENT] \n} \n?>",
 		'DEF_CONTROLLER_CLASS'	=> "<?php\n class [DEF_CONTROLLER_NAME] extends Controller {\n [DEF_CONTENT] \n} \n?>",
 		'DEF_LIBRARY_CLASS'		=> "<?php\n class [DEF_LIBRARY_NAME] {\n [DEF_CONTENT] \n} \n?>",
-		'DEF_METHOD'			=> "\tpublic function [DEF_METHOD_NAME](){\n\t\n}",
+		'DEF_METHOD'			=> "\tpublic function [DEF_METHOD_NAME](\$arg){\n\t\n\t}\n",
 		'DEF_PATH'				=> null
 	);
 	
@@ -128,7 +197,7 @@ class Model extends Base {
 	function __construct(){
 		parent::__construct();
 	}
-	public function create($in){
+	public function create($obj,$in){
 		//According to CodeIgniter standards, the model must have first letter capitalized
 		$name=ucwords(strtolower($in[3]));
 		
@@ -143,10 +212,44 @@ class Model extends Base {
 			array($content,$name),
 			Config::get('DEF_MODEL_CLASS'));
 			
-		//php_check_syntax
-		//echo highlight_string($result)."\n\n";
-		echo $result."\n\n";
+		$obj->writeToFile('library',$name,$result);
 		
+	}
+	public function modify($obj,$in){
+		if(method_exists($this,'_'.$in[4])){
+			$this->{'_'.$in[4]}($in);
+		}else{
+			throw new Exception('Action not defined! ('.$in[4].')'); 
+		}
+	}
+	public function generate($obj,$in){
+		$in=$this->parseArgs($in);
+		print_r($in);
+		//See if they just want all of them created
+		if(isset($in[3]) && strtolower($in[3])=='all'){
+			
+			//Connect to the database using the options in config.php
+			$path=Config::get('DEF_PATH');
+			echo 'p:'.$path;
+			
+			// If we don't have a path, use the local one
+			if($path===null){ $path=getcwd(); }
+			$p=$path.'/system/application/config';
+			echo $p;
+			if(is_file($p.'/database.php')){
+				//Cheat to let CI let us into the config file
+				// NOTE: this will only work for MySQL right now...[default]
+				define('BASEPATH',true);
+				include_once($p.'/database.php');
+				print_r($db);
+				
+				//@TODO
+				
+			}else{ throw new Exception('Cannot load config file!'); }
+			
+		}else{
+			//Not sure what to do here yet...
+		}
 	}
 }
 //-------------------
@@ -156,7 +259,7 @@ class Controller extends Base {
 		parent::__construct();
 	}
 	//-----------------
-	public function create($in){
+	public function create($obj,$in){
 		//According to CodeIgniter standards, the model must have first letter capitalized
 		$name=ucwords(strtolower($in[3]));
 		
@@ -171,9 +274,14 @@ class Controller extends Base {
 			array($content,$name),
 			Config::get('DEF_CONTROLLER_CLASS'));
 			
-		//php_check_syntax
-		//echo highlight_string($result)."\n\n";
-		echo $result."\n\n";
+		$obj->writeToFile('library',$name,$result);
+	}
+	public function modify($obj,$in){
+		if(method_exists($this,'_'.$in[4])){
+			$this->{'_'.$in[4]}($in);
+		}else{
+			throw new Exception('Action not defined! ('.$in[4].')'); 
+		}
 	}
 }
 //-------------------
@@ -200,56 +308,12 @@ class Library extends Base {
 		$obj->writeToFile('library',$name,$result);
 	}
 	public function modify($obj,$in){
-		//print_r($in);
-		
 		if(method_exists($this,'_'.$in[4])){
 			$this->{'_'.$in[4]}($in);
 		}else{
 			throw new Exception('Action not defined! ('.$in[4].')'); 
 		}
 	}
-	//-----------------
-	private function _addMethod($in){
-		echo 'add method';
-		print_r($in);
-		
-		$path=Config::get('DEF_PATH');
-		$lib_name=ucwords(strtolower($in[3]));
-		$lib=$lib_name.'.php';
-		
-		// If we don't have a path, use the local one
-		if($path===null){ $path=getcwd(); }
-		$p=$path.'/system/application/library/'.$lib;
-		
-		echo $p; 
-		
-		// See if the file exists and if it can be written too...
-		if(is_file($p)){
-			if(is_writable($p)){
-				//Excellent! Lets find the location of the end of the last method!
-				
-				include_once($p);
-				$ref=new ReflectionClass($lib_name);
-				$meth=$ref->getMethods();
-				$last_line=$meth[0]->getEndLine();
-				
-				$out['content']=str_replace(
-					array('[DEF_METHOD_NAME]'),
-					array($in[5]),
-					Config::get('DEF_METHOD'));
-				
-				// Now, lets insert something in there
-				$lines	= file($p);
-				$before	= array_splice($lines,0,$last_line);
-				$all	= array_merge($before,$out,$lines);
-				
-				// Write it out!
-				file_put_contents($p,implode("",$all));
-				
-			}else{ throw new Exception('Invalid permissions! ('.$p.')'); }
-		}else{ throw new Exception('Library file not found! ('.$p.')'); }
-	}
-	
 }
 ################################
 
